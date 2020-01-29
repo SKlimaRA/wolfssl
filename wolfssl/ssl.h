@@ -973,6 +973,13 @@ WOLFSSL_API int  wolfSSL_CTX_memsave_cert_cache(WOLFSSL_CTX*, void*, int, int*);
 WOLFSSL_API int  wolfSSL_CTX_memrestore_cert_cache(WOLFSSL_CTX*, const void*, int);
 WOLFSSL_API int  wolfSSL_CTX_get_cert_cache_memsize(WOLFSSL_CTX*);
 
+WOLFSSL_API int wolfSSL_CTX_set_cipher_list_ID(WOLFSSL_CTX* ctx,
+                                               const byte* suiteArray,
+                                               const int suiteArrLen);
+WOLFSSL_API int wolfSSL_set_cipher_list_ID(WOLFSSL* ssl,
+                                           const byte* suiteArray,
+                                           const int suiteArrLen);
+
 /* only supports full name from cipher_name[] delimited by : */
 WOLFSSL_API int  wolfSSL_CTX_set_cipher_list(WOLFSSL_CTX*, const char*);
 WOLFSSL_API int  wolfSSL_set_cipher_list(WOLFSSL*, const char*);

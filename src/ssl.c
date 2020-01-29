@@ -11322,6 +11322,63 @@ static int wolfSSL_parse_cipher_list(WOLFSSL_CTX* ctx, Suites* suites,
 #endif
 
 
+int wolfSSL_CTX_set_cipher_list_ID(WOLFSSL_CTX* ctx,
+                                   const byte* suiteArray,
+                                   const int suiteArrLen)
+{
+    WOLFSSL_ENTER("wolfSSL_CTX_set_cipher_list_ID");
+
+    if (suiteArrLen > WOLFSSL_MAX_SUITE_SZ) {
+        WOLFSSL_MSG("Cannot handle that many cipher suites.");
+        return WOLFSSL_FAILURE;
+    }
+
+    /* alloc/init on demand only */
+    if (ctx->suites == NULL) {
+        ctx->suites = (Suites*)XMALLOC(sizeof(Suites), ctx->heap,
+            DYNAMIC_TYPE_SUITES);
+        if (ctx->suites == NULL) {
+            WOLFSSL_MSG("Memory alloc for Suites failed");
+            return WOLFSSL_FAILURE;
+        }
+        XMEMSET(ctx->suites, 0, sizeof(Suites));
+    }
+
+    return (SetCipherList_ex(ctx, ctx->suites, suiteArray, suiteArrLen))
+            ? WOLFSSL_SUCCESS
+            : WOLFSSL_FAILURE;
+}
+
+
+int wolfSSL_set_cipher_list_ID(WOLFSSL* ssl,
+                               const byte* suiteArray,
+                               const int suiteArrLen)
+{
+    WOLFSSL_ENTER("wolfSSL_set_cipher_list_ID");
+
+    if (suiteArrLen > WOLFSSL_MAX_SUITE_SZ) {
+        WOLFSSL_MSG("Cannot handle that many cipher suites.");
+        return WOLFSSL_FAILURE;
+    }
+
+#ifdef SINGLE_THREADED
+    if (ssl->ctx->suites == ssl->suites) {
+        ssl->suites = (Suites*)XMALLOC(sizeof(Suites), ssl->heap,
+                                       DYNAMIC_TYPE_SUITES);
+        if (ssl->suites == NULL) {
+            WOLFSSL_MSG("Suites Memory error");
+            return MEMORY_E;
+        }
+        ssl->options.ownSuites = 1;
+    }
+#endif
+
+    return (SetCipherList_ex(ssl->ctx, ssl->suites, suiteArray, suiteArrLen))
+            ? WOLFSSL_SUCCESS
+            : WOLFSSL_FAILURE;
+}
+
+
 int wolfSSL_CTX_set_cipher_list(WOLFSSL_CTX* ctx, const char* list)
 {
     WOLFSSL_ENTER("wolfSSL_CTX_set_cipher_list");

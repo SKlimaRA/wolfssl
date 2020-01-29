@@ -10224,7 +10224,7 @@ int ProcessPeerCerts(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                 #endif /* WOLFSSL_TRUST_PEER_CERT */
                 ) {
                     int skipAddCA = 0;
-                    
+
                     /* select last certificate */
                     args->certIdx = args->count - 1;
 
@@ -18201,9 +18201,7 @@ int SetCipherList(WOLFSSL_CTX* ctx, Suites* suites, const char* list)
 {
     int       ret          = 0;
     int       idx          = 0;
-    int       haveRSAsig   = 0;
-    int       haveECDSAsig = 0;
-    int       haveAnon     = 0;
+    byte      suitesId[WOLFSSL_MAX_SUITE_SZ];
     const int suiteSz      = GetCipherNamesSize();
     char*     next         = (char*)list;
 
@@ -18235,67 +18233,135 @@ int SetCipherList(WOLFSSL_CTX* ctx, Suites* suites, const char* list)
                 || XSTRNCMP(name, cipher_names[i].name_iana, sizeof(name)) == 0
             #endif
              ) {
-            #ifdef WOLFSSL_DTLS
-                /* don't allow stream ciphers with DTLS */
-                if (ctx->method->version.major == DTLS_MAJOR) {
-                    if (XSTRSTR(name, "RC4") ||
-                        XSTRSTR(name, "HC128") ||
-                        XSTRSTR(name, "RABBIT"))
-                    {
-                        WOLFSSL_MSG("Stream ciphers not supported with DTLS");
-                        continue;
-                    }
-
-                }
-            #endif /* WOLFSSL_DTLS */
-
-                if (idx + 1 >= WOLFSSL_MAX_SUITE_SZ) {
-                    WOLFSSL_MSG("WOLFSSL_MAX_SUITE_SZ set too low");
-                    return 0; /* suites buffer not large enough, error out */
-                }
-
-                suites->suites[idx++] = cipher_names[i].cipherSuite0;
-                suites->suites[idx++] = cipher_names[i].cipherSuite;
-                /* The suites are either ECDSA, RSA, PSK, or Anon. The RSA
-                 * suites don't necessarily have RSA in the name. */
-            #ifdef WOLFSSL_TLS13
-                if (cipher_names[i].cipherSuite0 == TLS13_BYTE ||
-                         (cipher_names[i].cipherSuite0 == ECC_BYTE &&
-                          (cipher_names[i].cipherSuite == TLS_SHA256_SHA256 ||
-                           cipher_names[i].cipherSuite == TLS_SHA384_SHA384))) {
-                #ifndef NO_RSA
-                    haveRSAsig = 1;
-                #endif
-                #if defined(HAVE_ECC) || defined(HAVE_ED25519)
-                    haveECDSAsig = 1;
-                #endif
-                }
-                else
-            #endif
-            #if defined(HAVE_ECC) || defined(HAVE_ED25519)
-                if ((haveECDSAsig == 0) && XSTRSTR(name, "ECDSA"))
-                    haveECDSAsig = 1;
-                else
-            #endif
-            #ifdef HAVE_ANON
-                if (XSTRSTR(name, "ADH"))
-                    haveAnon = 1;
-                else
-            #endif
-                if (haveRSAsig == 0
-                    #ifndef NO_PSK
-                        && (XSTRSTR(name, "PSK") == NULL)
-                    #endif
-                   ) {
-                    haveRSAsig = 1;
-                }
-
+                suitesId[idx++] = cipher_names[i].cipherSuite0;
+                suitesId[idx++] = cipher_names[i].cipherSuite;
                 ret = 1; /* found at least one */
                 break;
             }
         }
     }
     while (next++); /* ++ needed to skip ':' */
+
+    if (ret) {
+        ret = SetCipherList_ex(ctx, suites, suitesId, idx);
+    }
+
+    (void)ctx;
+
+    return ret;
+}
+
+
+/**
+Set the enabled cipher suites.
+
+@param [out] suites Suites structure.
+@param [in]  list   List of cipher suites, every odd byte is the cipherSuite0
+                    byte and every even byte is cipherSuite byte from
+                    cipher_names[].
+@param [in]  listSz Size of the list in bytes.
+
+@return true on success, else false.
+*/
+int SetCipherList_ex(WOLFSSL_CTX* ctx, Suites* suites, const byte* list,
+                     const int listSz)
+{
+    int       ret          = 0;
+    int       idx          = 0;
+    int       haveRSAsig   = 0;
+    int       haveECDSAsig = 0;
+    int       haveAnon     = 0;
+    const int suiteSz      = GetCipherNamesSize();
+    byte*     next         = (byte*)list;
+
+    if (suites == NULL || list == NULL) {
+        WOLFSSL_MSG("SetCipherList parameter error");
+        return 0;
+    }
+
+    for (int j = 0; j < listSz; j+=2) {
+        byte   firstByte = next[j];
+        byte   secondByte = next[j+1];
+        char   name[MAX_SUITE_NAME + 1];
+        int    i;
+        int    found = 0;
+        word32 length;
+
+        for (i = 0; i < suiteSz; i++) {
+            if ((firstByte == cipher_names[i].cipherSuite0) &&
+                (secondByte == cipher_names[i].cipherSuite))
+            {
+                found = 1;
+                break;
+            }
+        }
+
+        if(!found)
+            continue;
+
+        length = (word32)XSTRLEN(cipher_names[i].name);
+
+        XSTRNCPY(name, cipher_names[i].name, length);
+        name[(length == sizeof(name)) ? length - 1 : length] = 0;
+
+        #ifdef WOLFSSL_DTLS
+            /* don't allow stream ciphers with DTLS */
+            if (ctx->method->version.major == DTLS_MAJOR) {
+                if (XSTRSTR(name, "RC4") ||
+                    XSTRSTR(name, "HC128") ||
+                    XSTRSTR(name, "RABBIT"))
+                {
+                    WOLFSSL_MSG("Stream ciphers not supported with DTLS");
+                    continue;
+                }
+
+            }
+        #endif /* WOLFSSL_DTLS */
+
+        if (idx + 1 >= WOLFSSL_MAX_SUITE_SZ) {
+            WOLFSSL_MSG("WOLFSSL_MAX_SUITE_SZ set too low");
+            return 0; /* suites buffer not large enough, error out */
+        }
+
+        suites->suites[idx++] = firstByte;
+        suites->suites[idx++] = secondByte;
+        /* The suites are either ECDSA, RSA, PSK, or Anon. The RSA
+         * suites don't necessarily have RSA in the name. */
+        #ifdef WOLFSSL_TLS13
+            if (cipher_names[i].cipherSuite0 == TLS13_BYTE ||
+                     (cipher_names[i].cipherSuite0 == ECC_BYTE &&
+                      (cipher_names[i].cipherSuite == TLS_SHA256_SHA256 ||
+                       cipher_names[i].cipherSuite == TLS_SHA384_SHA384))) {
+            #ifndef NO_RSA
+                haveRSAsig = 1;
+            #endif
+            #if defined(HAVE_ECC) || defined(HAVE_ED25519)
+                haveECDSAsig = 1;
+            #endif
+            }
+            else
+        #endif
+        #if defined(HAVE_ECC) || defined(HAVE_ED25519)
+            if ((haveECDSAsig == 0) && XSTRSTR(name, "ECDSA"))
+                haveECDSAsig = 1;
+            else
+        #endif
+        #ifdef HAVE_ANON
+            if (XSTRSTR(name, "ADH"))
+                haveAnon = 1;
+            else
+        #endif
+
+        if (haveRSAsig == 0
+            #ifndef NO_PSK
+                && (XSTRSTR(name, "PSK") == NULL)
+            #endif
+            ) {
+            haveRSAsig = 1;
+        }
+
+            ret = 1; /* found at least one */
+    }
 
     if (ret) {
         int keySz = 0;

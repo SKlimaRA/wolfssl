@@ -1781,6 +1781,8 @@ WOLFSSL_LOCAL void InitSuites(Suites*, ProtocolVersion, int, word16, word16,
                               word16, word16, word16, word16, word16, int);
 WOLFSSL_LOCAL int  MatchSuite(WOLFSSL* ssl, Suites* peerSuites);
 WOLFSSL_LOCAL int  SetCipherList(WOLFSSL_CTX*, Suites*, const char* list);
+WOLFSSL_LOCAL int  SetCipherList_ex(WOLFSSL_CTX* ctx, Suites* suites,
+                                    const byte* list, const int listSz);
 
 #ifndef PSK_TYPES_DEFINED
     typedef unsigned int (*wc_psk_client_callback)(WOLFSSL*, const char*, char*,
